@@ -31,7 +31,7 @@ fun ClassScheduleScreen() {
     val pagerState = rememberPagerState(pageCount = { days.size })
 
     LaunchedEffect(Unit) {
-        val data = repository.getCourseData()//如果你懂學校api的話就直接改這行
+        val data = repository.getCourseData("")//如果你懂學校api的話就直接改這行
         courseData = data
         isLoading = false
     }
@@ -102,7 +102,7 @@ fun DayScheduleList(classes: List<CourseItem>, weekday: Int) {
                     teacherName = course.teach_name,
                     startTime = startAndEnd.first,
                     endTime = startAndEnd.second,
-                    stdNo = course.cos_ele_seq,
+                    stdNo = course.seat_no,
                     weekday = weekday
                 )
             }
