@@ -10,9 +10,7 @@ plugins {
 
 android {
     namespace = "app.dauphin"
-    compileSdk {
-        version = release(36)
-    }
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "app.dauphin.android"
@@ -116,6 +114,9 @@ dependencies {
 
     implementation(libs.hilt.android)
     implementation(libs.glide.compose)
+
+    implementation(libs.okhttp)
+    implementation(libs.androidx.datastore.preferences)
 
     ksp(libs.hilt.compiler)
 
