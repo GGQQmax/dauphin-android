@@ -149,19 +149,20 @@ class CourseCardWidget : GlanceAppWidget() {
             "02" to (9 to 10),
             "03" to (10 to 10),
             "04" to (11 to 10),
-            "05" to (13 to 10),
-            "06" to (14 to 10),
-            "07" to (15 to 10),
-            "08" to (16 to 10),
-            "09" to (17 to 10),
-            "10" to (18 to 20),
-            "11" to (19 to 15),
-            "12" to (20 to 10),
-            "13" to (21 to 5),
-            "A" to (18 to 10),
-            "B" to (19 to 10),
-            "C" to (20 to 10),
-            "D" to (21 to 10)
+            "05" to (12 to 10),
+            "06" to (13 to 10),
+            "07" to (14 to 10),
+            "08" to (15 to 10),
+            "09" to (16 to 10),
+            "10" to (17 to 10),
+            "11" to (18 to 10),
+            "12" to (19 to 10),
+            "13" to (21 to 10),
+            "14" to (22 to 10),
+            "A"  to (18 to 10),
+            "B"  to (19 to 10),
+            "C"  to (20 to 10),
+            "D"  to (21 to 10)
         )
         val cleanSessions = sessions.filter { it.isNotBlank() }
         if (cleanSessions.isEmpty()) throw IllegalArgumentException("No session")
