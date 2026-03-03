@@ -28,10 +28,25 @@ fun ClassScheduleScreen() {
     val scope = rememberCoroutineScope()
 
     val days = listOf("Mon", "Tue", "Wed", "Thu", "Fri", "Sat")
-    val pagerState = rememberPagerState(pageCount = { days.size })
+    
+    val initialPage = remember {
+        val calendar = Calendar.getInstance()
+        // Calendar.SUNDAY = 1, MONDAY = 2, ..., SATURDAY = 7
+        when (calendar.get(Calendar.DAY_OF_WEEK)) {
+            Calendar.MONDAY -> 0
+            Calendar.TUESDAY -> 1
+            Calendar.WEDNESDAY -> 2
+            Calendar.THURSDAY -> 3
+            Calendar.FRIDAY -> 4
+            Calendar.SATURDAY -> 5
+            else -> 0 // Default to Monday for Sunday
+        }
+    }
+    
+    val pagerState = rememberPagerState(initialPage = initialPage, pageCount = { days.size })
 
     LaunchedEffect(Unit) {
-        val data = repository.getCourseData("")//如果你懂學校api的話就直接改這行
+        val data = repository.getCourseData("")
         courseData = data
         isLoading = false
     }
@@ -39,7 +54,7 @@ fun ClassScheduleScreen() {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .statusBarsPadding() // This adds padding to avoid the status bar (battery, time, etc.)
+            .statusBarsPadding()
     ) {
         SecondaryTabRow(
             selectedTabIndex = pagerState.currentPage,
@@ -95,7 +110,7 @@ fun DayScheduleList(classes: List<CourseItem>, weekday: Int) {
             contentPadding = PaddingValues(bottom = 16.dp)
         ) {
             items(classes.sortedBy { it.sess1 }) { course ->
-                val startAndEnd = getSessionTimes(course.sess1, course.sess2)
+                val startAndEnd = getSessionTimes(listOf(course.sess1, course.sess2, course.sess3))
                 CourseCardView(
                     courseName = course.ch_cos_name,
                     roomNumber = course.room,
@@ -110,11 +125,8 @@ fun DayScheduleList(classes: List<CourseItem>, weekday: Int) {
     }
 }
 
-/**
- * Maps TKU session codes to actual times.
- */
-private fun getSessionTimes(sessStart: String, sessEnd: String): Pair<Date, Date> {
-    val sessionToTime = mapOf(
+private fun getSessionTimes(sessions: List<String>): Pair<Date, Date> {
+    val sessionToStartTime = mapOf(
         "01" to (8 to 10),
         "02" to (9 to 10),
         "03" to (10 to 10),
@@ -127,27 +139,34 @@ private fun getSessionTimes(sessStart: String, sessEnd: String): Pair<Date, Date
         "10" to (18 to 20),
         "11" to (19 to 15),
         "12" to (20 to 10),
-        "13" to (21 to 0),
+        "13" to (21 to 5),
         "A"  to (18 to 10),
         "B"  to (19 to 10),
         "C"  to (20 to 10),
         "D"  to (21 to 10)
     )
+    val cleanSessions = sessions.filter { it.isNotBlank() }
+    if (cleanSessions.isEmpty()) throw IllegalArgumentException("No session")
+
+    val first = cleanSessions.first()
+    val last = cleanSessions.last()
 
     fun createDate(sessionCode: String, isEnd: Boolean): Date {
-        val cleanCode = sessionCode.trim()
-        val time = sessionToTime[cleanCode] ?: (8 to 0)
+        val time = sessionToStartTime[sessionCode.trim()]
+            ?: throw IllegalArgumentException("Unknown session: $sessionCode")
+
         val cal = Calendar.getInstance()
         cal.set(Calendar.HOUR_OF_DAY, time.first)
         cal.set(Calendar.MINUTE, time.second)
         cal.set(Calendar.SECOND, 0)
         cal.set(Calendar.MILLISECOND, 0)
-        
+
         if (isEnd) {
-            cal.add(Calendar.MINUTE, 50) // Each session is 50 mins
+            cal.add(Calendar.MINUTE, 50)
         }
+
         return cal.time
     }
 
-    return createDate(sessStart, false) to createDate(sessEnd, true)
+    return createDate(first, false) to createDate(last, true)
 }
