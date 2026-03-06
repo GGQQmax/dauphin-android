@@ -1,5 +1,8 @@
 package app.dauphin.views.screens
 
+import android.util.Log
+import android.webkit.CookieManager
+import android.widget.Toast
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -16,16 +19,31 @@ import app.dauphin.data.CourseRepository
 import kotlinx.coroutines.launch
 
 @Composable
-fun SettingsScreen() {
+fun SettingsScreen(onLogout: () -> Unit = {}) {
     val context = LocalContext.current
-    val repository = remember { CourseRepository(context) }
+    val repository = remember { CourseRepository(context.applicationContext) }
     val scope = rememberCoroutineScope()
 
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Button(
             onClick = {
+                Log.d("SettingsScreen", "Logout button clicked")
                 scope.launch {
-                    repository.clearSession()
+                    try {
+                        repository.clearSession()
+                        
+                        val cookieManager = CookieManager.getInstance()
+                        cookieManager.removeAllCookies { success ->
+                            Log.d("SettingsScreen", "Cookies removed: $success")
+                        }
+                        cookieManager.flush()
+                        
+                        Toast.makeText(context, "Logged out successfully", Toast.LENGTH_SHORT).show()
+                        onLogout()
+                    } catch (e: Exception) {
+                        Log.e("SettingsScreen", "Logout failed", e)
+                        Toast.makeText(context, "Logout failed: ${e.message}", Toast.LENGTH_LONG).show()
+                    }
                 }
             },
             modifier = Modifier.padding(16.dp)
