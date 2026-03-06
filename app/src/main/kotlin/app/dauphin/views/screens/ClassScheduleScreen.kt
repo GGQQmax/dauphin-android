@@ -14,8 +14,10 @@ import androidx.compose.ui.unit.dp
 import app.dauphin.data.CourseRepository
 import app.dauphin.models.CourseItem
 import app.dauphin.models.CourseResponse
+import app.dauphin.util.CryptoManager
 import app.dauphin.views.screens.day.CourseCardView
 import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
 import java.util.*
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -46,7 +48,13 @@ fun ClassScheduleScreen() {
     val pagerState = rememberPagerState(initialPage = initialPage, pageCount = { days.size })
 
     LaunchedEffect(Unit) {
-        val data = repository.getCourseData("")
+        // Generate current timestamp in yyyyMMddHHmmssSSS format
+        val timestamp = SimpleDateFormat("yyyyMMddHHmmssSSS", Locale.getDefault()).format(Date())
+        val rawValue = "${timestamp},your stu number"
+        
+        // Automatically encrypts the raw value using CryptoManager
+        val encryptedData = CryptoManager.encrypt(rawValue)
+        val data = repository.getCourseData(encryptedData)
         courseData = data
         isLoading = false
     }
