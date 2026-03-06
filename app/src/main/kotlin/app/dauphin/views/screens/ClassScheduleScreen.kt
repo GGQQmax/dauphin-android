@@ -1,5 +1,7 @@
 package app.dauphin.views.screens
 
+import android.webkit.WebView
+import android.webkit.WebViewClient
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -11,6 +13,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.viewinterop.AndroidView
 import app.dauphin.data.CourseRepository
 import app.dauphin.models.CourseItem
 import app.dauphin.models.CourseResponse
@@ -25,85 +28,119 @@ import java.util.*
 fun ClassScheduleScreen() {
     val context = LocalContext.current
     val repository = remember { CourseRepository(context) }
+    val studentId by repository.studentIdFlow.collectAsState(initial = "")
+    
     var courseData by remember { mutableStateOf<CourseResponse?>(null) }
     var isLoading by remember { mutableStateOf(true) }
     val scope = rememberCoroutineScope()
 
-    val days = listOf("Mon", "Tue", "Wed", "Thu", "Fri", "Sat")
-    
-    val initialPage = remember {
-        val calendar = Calendar.getInstance()
-        // Calendar.SUNDAY = 1, MONDAY = 2, ..., SATURDAY = 7
-        when (calendar.get(Calendar.DAY_OF_WEEK)) {
-            Calendar.MONDAY -> 0
-            Calendar.TUESDAY -> 1
-            Calendar.WEDNESDAY -> 2
-            Calendar.THURSDAY -> 3
-            Calendar.FRIDAY -> 4
-            Calendar.SATURDAY -> 5
-            else -> 0 // Default to Monday for Sunday
-        }
-    }
-    
-    val pagerState = rememberPagerState(initialPage = initialPage, pageCount = { days.size })
-
-    LaunchedEffect(Unit) {
-        // Generate current timestamp in yyyyMMddHHmmssSSS format
-        val timestamp = SimpleDateFormat("yyyyMMddHHmmssSSS", Locale.getDefault()).format(Date())
-        val rawValue = "${timestamp},your stu number"
+    if (studentId.isNullOrEmpty()) {
+        LoginWebView(onLoginSuccess = { id ->
+            scope.launch {
+                repository.saveStudentId(id)
+            }
+        })
+    } else {
+        val days = listOf("Mon", "Tue", "Wed", "Thu", "Fri", "Sat")
         
-        // Automatically encrypts the raw value using CryptoManager
-        val encryptedData = CryptoManager.encrypt(rawValue)
-        val data = repository.getCourseData(encryptedData)
-        courseData = data
-        isLoading = false
-    }
+        val initialPage = remember {
+            val calendar = Calendar.getInstance()
+            when (calendar.get(Calendar.DAY_OF_WEEK)) {
+                Calendar.MONDAY -> 0
+                Calendar.TUESDAY -> 1
+                Calendar.WEDNESDAY -> 2
+                Calendar.THURSDAY -> 3
+                Calendar.FRIDAY -> 4
+                Calendar.SATURDAY -> 5
+                else -> 0
+            }
+        }
+        
+        val pagerState = rememberPagerState(initialPage = initialPage, pageCount = { days.size })
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .statusBarsPadding()
-    ) {
-        SecondaryTabRow(
-            selectedTabIndex = pagerState.currentPage,
-            containerColor = MaterialTheme.colorScheme.surface,
-            contentColor = MaterialTheme.colorScheme.primary,
-            divider = {}
+        LaunchedEffect(studentId) {
+            if (!studentId.isNullOrEmpty()) {
+                isLoading = true
+                val timestamp = SimpleDateFormat("yyyyMMddHHmmssSSS", Locale.getDefault()).format(Date())
+                val rawValue = "${timestamp},${studentId}"
+                
+                val encryptedData = CryptoManager.encrypt(rawValue)
+                val data = repository.getCourseData(encryptedData)
+                courseData = data
+                isLoading = false
+            }
+        }
+
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .statusBarsPadding()
         ) {
-            days.forEachIndexed { index, day ->
-                Tab(
-                    selected = pagerState.currentPage == index,
-                    onClick = {
-                        scope.launch {
-                            pagerState.animateScrollToPage(index)
+            SecondaryTabRow(
+                selectedTabIndex = pagerState.currentPage,
+                containerColor = MaterialTheme.colorScheme.surface,
+                contentColor = MaterialTheme.colorScheme.primary,
+                divider = {}
+            ) {
+                days.forEachIndexed { index, day ->
+                    Tab(
+                        selected = pagerState.currentPage == index,
+                        onClick = {
+                            scope.launch {
+                                pagerState.animateScrollToPage(index)
+                            }
+                        },
+                        text = {
+                            Text(
+                                text = day,
+                                style = MaterialTheme.typography.titleSmall
+                            )
                         }
-                    },
-                    text = {
-                        Text(
-                            text = day,
-                            style = MaterialTheme.typography.titleSmall
-                        )
-                    }
-                )
+                    )
+                }
             }
-        }
 
-        if (isLoading) {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator()
-            }
-        } else {
-            HorizontalPager(
-                state = pagerState,
-                modifier = Modifier.weight(1f)
-            ) { pageIndex ->
-                val dayOfWeekValue = (pageIndex + 1).toString()
-                val classesForDay = courseData?.stuelelist?.filter { it.week == dayOfWeekValue } ?: emptyList()
+            if (isLoading) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator()
+                }
+            } else {
+                HorizontalPager(
+                    state = pagerState,
+                    modifier = Modifier.weight(1f)
+                ) { pageIndex ->
+                    val dayOfWeekValue = (pageIndex + 1).toString()
+                    val classesForDay = courseData?.stuelelist?.filter { it.week == dayOfWeekValue } ?: emptyList()
 
-                DayScheduleList(classes = classesForDay, weekday = pageIndex + 1)
+                    DayScheduleList(classes = classesForDay, weekday = pageIndex + 1)
+                }
             }
         }
     }
+}
+
+@Composable
+fun LoginWebView(onLoginSuccess: (String) -> Unit) {
+    val context = LocalContext.current
+    AndroidView(factory = {
+        WebView(context).apply {
+            settings.javaScriptEnabled = true
+            settings.domStorageEnabled = true
+            webViewClient = object : WebViewClient() {
+                override fun onPageFinished(view: WebView?, url: String?) {
+                    super.onPageFinished(view, url)
+                    // The token extraction logic
+                    view?.evaluateJavascript("(function() { return typeof getSsoLoginToken === 'function' ? getSsoLoginToken() : null; })();") { result ->
+                        val token = result.trim('"')
+                        if (token != "null" && token.isNotEmpty()) {
+                            onLoginSuccess(token)
+                        }
+                    }
+                }
+            }
+            loadUrl("https://sso.tku.edu.tw/ilife/CoWork/AndroidSsoLogin.cshtml")
+        }
+    }, modifier = Modifier.fillMaxSize())
 }
 
 @Composable
