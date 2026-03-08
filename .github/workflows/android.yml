@@ -10,6 +10,9 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      AES_KEY: ${{ secrets.AES_KEY }}
+      AES_IV: ${{ secrets.AES_IV }}
     steps:
     - name: Checkout Code
       uses: actions/checkout@v4
