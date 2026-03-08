@@ -70,7 +70,7 @@ class CourseCardWidget : GlanceAppWidget() {
                         Text(
                             text = if (isOngoing) "Ongoing" else "Next Class",
                             style = TextStyle(
-                                color = if (isOngoing) ColorProvider(Color.Green) else GlanceTheme.colors.primary,
+                                color = if (isOngoing) GlanceTheme.colors.secondary else GlanceTheme.colors.primary,
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 12.sp
                             )
