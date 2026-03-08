@@ -33,5 +33,5 @@ jobs:
     - name: Upload Debug APK
       uses: actions/upload-artifact@v4
       with:
-        name: app-debug
+        name: dauphin-android
         path: app/build/outputs/apk/debug/app-debug.apk
