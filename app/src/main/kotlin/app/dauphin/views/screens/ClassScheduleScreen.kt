@@ -22,6 +22,7 @@ import app.dauphin.views.screens.day.CourseCardView
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.*
+import kotlin.math.abs
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -41,7 +42,7 @@ fun ClassScheduleScreen() {
             }
         })
     } else {
-        val days = listOf("Mon", "Tue", "Wed", "Thu", "Fri", "Sat")
+        val days = remember { listOf("Mon", "Tue", "Wed", "Thu", "Fri", "Sat") }
         
         val initialPage = remember {
             val calendar = Calendar.getInstance()
@@ -87,7 +88,13 @@ fun ClassScheduleScreen() {
                         selected = pagerState.currentPage == index,
                         onClick = {
                             scope.launch {
-                                pagerState.animateScrollToPage(index)
+                                // Performance Fix: If the jump is more than 1 day, jump instantly
+                                // to avoid loading intermediate days during animation.
+                                if (abs(pagerState.currentPage - index) > 1) {
+                                    pagerState.scrollToPage(index)
+                                } else {
+                                    pagerState.animateScrollToPage(index)
+                                }
                             }
                         },
                         text = {
@@ -107,10 +114,14 @@ fun ClassScheduleScreen() {
             } else {
                 HorizontalPager(
                     state = pagerState,
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.weight(1f),
+                    beyondViewportPageCount = 1
                 ) { pageIndex ->
                     val dayOfWeekValue = (pageIndex + 1).toString()
-                    val classesForDay = courseData?.stuelelist?.filter { it.week == dayOfWeekValue } ?: emptyList()
+                    val classesForDay = remember(courseData, dayOfWeekValue) {
+                        courseData?.stuelelist?.filter { it.week == dayOfWeekValue }
+                            ?.sortedBy { it.sess1 } ?: emptyList()
+                    }
 
                     DayScheduleList(classes = classesForDay, weekday = pageIndex + 1)
                 }
@@ -129,7 +140,6 @@ fun LoginWebView(onLoginSuccess: (String) -> Unit) {
             webViewClient = object : WebViewClient() {
                 override fun onPageFinished(view: WebView?, url: String?) {
                     super.onPageFinished(view, url)
-                    // The token extraction logic
                     view?.evaluateJavascript("(function() { return typeof getSsoLoginToken === 'function' ? getSsoLoginToken() : null; })();") { result ->
                         val token = result.trim('"')
                         if (token != "null" && token.isNotEmpty()) {
@@ -154,8 +164,11 @@ fun DayScheduleList(classes: List<CourseItem>, weekday: Int) {
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(bottom = 16.dp)
         ) {
-            items(classes.sortedBy { it.sess1 }) { course ->
-                val startAndEnd = getSessionTimes(listOf(course.sess1, course.sess2, course.sess3))
+            items(
+                items = classes,
+                key = { it.cos_no + it.cos_ele_seq + it.sess1 } // Improved key uniqueness
+            ) { course ->
+                val startAndEnd = remember(course) { getSessionTimes(listOf(course.sess1, course.sess2, course.sess3)) }
                 CourseCardView(
                     courseName = course.ch_cos_name,
                     roomNumber = course.room,
@@ -192,14 +205,13 @@ private fun getSessionTimes(sessions: List<String>): Pair<Date, Date> {
         "D"  to (21 to 10)
     )
     val cleanSessions = sessions.filter { it.isNotBlank() }
-    if (cleanSessions.isEmpty()) throw IllegalArgumentException("No session")
+    if (cleanSessions.isEmpty()) return Date(0) to Date(0)
 
     val first = cleanSessions.first()
     val last = cleanSessions.last()
 
     fun createDate(sessionCode: String, isEnd: Boolean): Date {
-        val time = sessionToStartTime[sessionCode.trim()]
-            ?: throw IllegalArgumentException("Unknown session: $sessionCode")
+        val time = sessionToStartTime[sessionCode.trim()] ?: (0 to 0)
 
         val cal = Calendar.getInstance()
         cal.set(Calendar.HOUR_OF_DAY, time.first)
