@@ -1,5 +1,6 @@
 package app.dauphin.views.screens
 
+import android.webkit.CookieManager
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.compose.foundation.layout.*
@@ -17,10 +18,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import app.dauphin.data.CourseRepository
 import app.dauphin.models.CourseItem
 import app.dauphin.models.CourseResponse
-import app.dauphin.util.CryptoManager
-import app.dauphin.views.screens.day.CourseCardView
 import kotlinx.coroutines.launch
-import java.text.SimpleDateFormat
 import java.util.*
 import kotlin.math.abs
 
@@ -29,16 +27,16 @@ import kotlin.math.abs
 fun ClassScheduleScreen() {
     val context = LocalContext.current
     val repository = remember { CourseRepository(context) }
-    val studentId by repository.studentIdFlow.collectAsState(initial = "")
+    val cookies by repository.cookiesFlow.collectAsState(initial = null)
     
     var courseData by remember { mutableStateOf<CourseResponse?>(null) }
-    var isLoading by remember { mutableStateOf(true) }
+    var isLoading by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
-    if (studentId.isNullOrEmpty()) {
-        LoginWebView(onLoginSuccess = { id ->
+    if (cookies.isNullOrEmpty()) {
+        LoginWebView(onLoginSuccess = { cookieValue ->
             scope.launch {
-                repository.saveStudentId(id)
+                repository.saveCookies(cookieValue)
             }
         })
     } else {
@@ -59,14 +57,10 @@ fun ClassScheduleScreen() {
         
         val pagerState = rememberPagerState(initialPage = initialPage, pageCount = { days.size })
 
-        LaunchedEffect(studentId) {
-            if (!studentId.isNullOrEmpty()) {
+        LaunchedEffect(cookies) {
+            if (!cookies.isNullOrEmpty()) {
                 isLoading = true
-                val timestamp = SimpleDateFormat("yyyyMMddHHmmssSSS", Locale.getDefault()).format(Date())
-                val rawValue = "${timestamp},${studentId}"
-                
-                val encryptedData = CryptoManager.encrypt(rawValue)
-                val data = repository.getCourseData(encryptedData)
+                val data = repository.getCourseData()
                 courseData = data
                 isLoading = false
             }
@@ -88,8 +82,6 @@ fun ClassScheduleScreen() {
                         selected = pagerState.currentPage == index,
                         onClick = {
                             scope.launch {
-                                // Performance Fix: If the jump is more than 1 day, jump instantly
-                                // to avoid loading intermediate days during animation.
                                 if (abs(pagerState.currentPage - index) > 1) {
                                     pagerState.scrollToPage(index)
                                 } else {
@@ -140,15 +132,18 @@ fun LoginWebView(onLoginSuccess: (String) -> Unit) {
             webViewClient = object : WebViewClient() {
                 override fun onPageFinished(view: WebView?, url: String?) {
                     super.onPageFinished(view, url)
-                    view?.evaluateJavascript("(function() { return typeof getSsoLoginToken === 'function' ? getSsoLoginToken() : null; })();") { result ->
-                        val token = result.trim('"')
-                        if (token != "null" && token.isNotEmpty()) {
-                            onLoginSuccess(token)
+                    val cookies = CookieManager.getInstance().getCookie(url)
+                    if (cookies != null && cookies.contains(".AspNetCore.Cookies")) {
+                        // Extract only the necessary cookie or pass all for safety
+                        val cookieArray = cookies.split(";")
+                        val targetCookie = cookieArray.find { it.trim().startsWith(".AspNetCore.Cookies=") }
+                        if (targetCookie != null) {
+                            onLoginSuccess(targetCookie.trim())
                         }
                     }
                 }
             }
-            loadUrl("https://sso.tku.edu.tw/ilife/CoWork/AndroidSsoLogin.cshtml")
+            loadUrl("https://ilifeapp.az.tku.edu.tw/MicrosoftIdentity/Account/SignIn")
         }
     }, modifier = Modifier.fillMaxSize())
 }
@@ -166,10 +161,10 @@ fun DayScheduleList(classes: List<CourseItem>, weekday: Int) {
         ) {
             items(
                 items = classes,
-                key = { it.cos_no + it.cos_ele_seq + it.sess1 } // Improved key uniqueness
+                key = { it.ch_cos_name + it.week + it.sess1 }
             ) { course ->
                 val startAndEnd = remember(course) { getSessionTimes(listOf(course.sess1, course.sess2, course.sess3)) }
-                CourseCardView(
+                app.dauphin.views.screens.day.CourseCardView(
                     courseName = course.ch_cos_name,
                     roomNumber = course.room,
                     teacherName = course.teach_name,
